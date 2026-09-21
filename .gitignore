@@ -1,0 +1,34 @@
+# chamba-matching — issue #355 (matching pgvector) + reuso de poc-job-posting-fetch (issue #229)
+
+# Secretos — NUNCA versionar (las credenciales reales viven en SSM Parameter
+# Store, ver deploy/ec2-code-deploy-manual.md, no en archivos .env commiteados)
+.env
+*.env
+!.env.example
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+.venv/
+venv/
+*.egg-info/
+
+# Node (demo-ui, si alguna vez suma tooling)
+node_modules/
+
+# Salidas de corridas / benchmarks — no versionar resultados, son reproducibles
+poc-pgvector-matching/output/*
+!poc-pgvector-matching/output/.gitkeep
+poc-job-posting-fetch/output/*
+!poc-job-posting-fetch/output/.gitkeep
+
+# Modelos descargados (BGE-M3, ~2.3GB) — se descargan solos en el container, no versionar
+*.safetensors
+*.bin
+*.pt
+
+# OS / editor
+.DS_Store
+.vscode/
+.idea/

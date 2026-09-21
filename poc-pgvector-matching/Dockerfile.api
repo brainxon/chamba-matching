@@ -1,0 +1,19 @@
+FROM python:3.13-slim
+
+WORKDIR /app
+
+# CPU-only torch wheel first (much smaller than el default CUDA build) -
+# needed by FlagEmbedding/BGE-M3 (issue #355: comparación de modelos de
+# embeddings — detalle en el historial de .issues/355-pgvector-matching-poc/).
+RUN pip install --no-cache-dir torch --index-url https://download.pytorch.org/whl/cpu
+
+COPY requirements-api.txt .
+RUN pip install --no-cache-dir -r requirements-api.txt
+
+COPY api/ api/
+
+# Sin CMD por defecto a propósito: esta imagen no tiene un servicio HTTP
+# propio en este repo (el `api`/demo de FastAPI quedó fuera, ver
+# ../deploy/ec2-code-deploy-manual.md) — la usan matching-batch y
+# seed-jobs (docker-compose.yml), que siempre especifican su propio
+# `command:`.

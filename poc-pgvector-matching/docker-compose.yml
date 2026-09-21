@@ -1,0 +1,135 @@
+# Servicio de matching pgvector — issue #355 (chamba-ai-backend-fastapi).
+# Este repo (brainxon/chamba-matching) es la versión recortada para
+# producción: solo lo que hace falta para correr en la EC2 de ingesta/
+# matching (ver ../deploy/). El PoC completo (demo interactiva, benchmark
+# de carga, comparación de modelos de embeddings) vive en el historial de
+# `.issues/355-pgvector-matching-poc/` del workspace principal — no acá.
+#
+# `db` + `job-fetch` quedan encendidos (ver ../deploy/02-start-stack.sh).
+# `matching-batch` y `seed-jobs` corren puntuales, por profile:
+#   docker compose --profile batch run --rm matching-batch
+#   docker compose --profile seed run --rm seed-jobs
+
+name: chamba-matching
+
+services:
+  db:
+    image: pgvector/pgvector:pg16
+    container_name: poc-pgvector-db
+    environment:
+      POSTGRES_USER: poc_app
+      POSTGRES_PASSWORD: poc_pass
+      # DB por defecto de la instancia; las dos DBs reales del spike
+      # (chamba_users, chamba_jobs_hot) las crea init-db/01-init.sql
+      POSTGRES_DB: postgres
+    volumes:
+      - ./init-db:/docker-entrypoint-initdb.d:ro
+      - poc_pgdata:/var/lib/postgresql/data
+    networks:
+      - poc-net
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U poc_app"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  # --- Scraping de hot jobs -----------------------------------------------
+  # Copia de poc-job-posting-fetch (issue #229) empaquetada junto a este
+  # servicio (repo brainxon/chamba-matching) para que un `git clone` sea
+  # autocontenido en la EC2 de producción — ver ../deploy/ec2-code-deploy-manual.md.
+  # Es una copia deliberada, no una referencia al PoC original en
+  # poc-job-posting-fetch/ (fuera de este repo) — puede quedar desactualizada
+  # si ese PoC sigue evolucionando por su cuenta; revisar antes de asumir
+  # que están sincronizados.
+  job-fetch:
+    build:
+      context: ../poc-job-posting-fetch
+    container_name: poc-pgvector-job-fetch
+    networks:
+      - poc-net
+
+  # --- Batch de matching diario (issue #355) ------------------------------
+  # NO corre por default. En producción lo dispara cron (ver
+  # ../deploy/run-daily-refresh.sh, en la EC2). Localmente:
+  #   docker compose --profile batch run --rm matching-batch           (todos)
+  #   docker compose --profile batch run --rm matching-batch python -m api.batch_refresh 4   (un solo cv_version_id)
+  # Escribe en el esquema `matching` de la DB REAL (chambai) — ver
+  # ../deploy/sql/001-create-matching-schema.sql. Requiere MATCHING_DB_PASSWORD
+  # (el rol matching_writer, distinto del de solo lectura de arriba).
+  matching-batch:
+    profiles: ["batch"]
+    build:
+      context: .
+      dockerfile: Dockerfile.api
+    container_name: poc-pgvector-matching-batch
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      JOBS_DB_HOST: db
+      JOBS_DB_PORT: "5432"
+      JOBS_DB_USER: poc_app
+      JOBS_DB_PASSWORD: poc_pass
+      JOBS_DB_NAME: chamba_jobs_hot
+      BACKEND_DB_HOST: host.docker.internal
+      BACKEND_DB_PORT: "5434"
+      BACKEND_DB_USER: "${BACKEND_DB_USER:-poc_pgvector_reader}"
+      BACKEND_DB_PASSWORD: "${BACKEND_DB_PASSWORD:-poc_reader_only_355}"
+      BACKEND_DB_NAME: "${BACKEND_DB_NAME:-chambai}"
+      MATCHING_DB_HOST: host.docker.internal
+      MATCHING_DB_PORT: "5434"
+      MATCHING_DB_USER: matching_writer
+      MATCHING_DB_PASSWORD: "${MATCHING_DB_PASSWORD:?falta MATCHING_DB_PASSWORD (rol matching_writer) - ver deploy/sql/001-create-matching-schema.sql}"
+      MATCHING_DB_NAME: "${MATCHING_DB_NAME:-chambai}"
+      EMBED_DIM: "384"
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    networks:
+      - poc-net
+    command: ["python", "-m", "api.batch_refresh"]
+
+  # --- Semilla inicial desde recent_job_postings (issue #355) -------------
+  # Smoke test primario del stack ya desplegado: carga job_postings
+  # (chamba_jobs_hot) con datos REALES que YA existen en recent_job_postings
+  # (DB real del backend, solo lectura) — feature de "recent jobs" existente,
+  # aislada por diseño (sin FKs, ver
+  # chamba-ai-backend-fastapi/domain/models/recent_job.py). Evita depender
+  # de job-fetch scrapeando URL por URL para tener algo con qué probar.
+  # Requiere el GRANT de ../deploy/sql/002-grant-recent-job-postings-read.sql
+  # (el rol de solo lectura original solo tenía curriculum_vitae_versions).
+  #   docker compose --profile seed run --rm seed-jobs
+  #   docker compose --profile seed run --rm seed-jobs python -m api.seed_jobs_from_recent 200
+  seed-jobs:
+    profiles: ["seed"]
+    build:
+      context: .
+      dockerfile: Dockerfile.api
+    container_name: poc-pgvector-seed-jobs
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      JOBS_DB_HOST: db
+      JOBS_DB_PORT: "5432"
+      JOBS_DB_USER: poc_app
+      JOBS_DB_PASSWORD: poc_pass
+      JOBS_DB_NAME: chamba_jobs_hot
+      BACKEND_DB_HOST: host.docker.internal
+      BACKEND_DB_PORT: "5434"
+      BACKEND_DB_USER: "${BACKEND_DB_USER:-poc_pgvector_reader}"
+      BACKEND_DB_PASSWORD: "${BACKEND_DB_PASSWORD:-poc_reader_only_355}"
+      BACKEND_DB_NAME: "${BACKEND_DB_NAME:-chambai}"
+      EMBED_DIM: "384"
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    networks:
+      - poc-net
+    command: ["python", "-m", "api.seed_jobs_from_recent"]
+
+networks:
+  poc-net:
+    driver: bridge
+
+volumes:
+  poc_pgdata:
+    driver: local
