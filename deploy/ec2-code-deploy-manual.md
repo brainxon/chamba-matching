@@ -72,8 +72,8 @@ hace falta ningún permiso de S3 (el repo es público).
 Completar con los valores reales antes de correr. En staging real, el rol de solo
 lectura es `app_reader` y la DB se llama `cover_letter_db_stg` — **no** `poc_pgvector_reader`/
 `chambai`, que son solo los defaults de dev-infra que trae `docker-compose.yml` (ver
-`.env.example`). La password de `matching_writer` es la que se definió al correr
-`sql/001-create-matching-writer-role.sql` en la EC2 actual (README.md paso 1b).
+`.env.example`). La password de `matching_service` es la que se definió al correr
+`sql/001-create-matching-service-role.sql` en la EC2 actual (README.md paso 1b).
 `JOBS_DB_PASSWORD` es una password nueva, a elección, para el Postgres local
 (`chamba_jobs_hot`) de esta misma EC2 — no existe todavía, la estás inventando acá.
 
@@ -243,10 +243,10 @@ instalado localmente, o repitiendo el patrón de `send-command` con `cat` sobre 
 
 ## 7. Confirmar que el resultado llegó a la DB real
 
-Desde la EC2 **actual** (la del backend, no esta nueva), con el rol `matching_writer`:
+Desde la EC2 **actual** (la del backend, no esta nueva), con el rol `matching_service`:
 
 ```bash
-docker exec chamba-db psql -U matching_writer -d cover_letter_db_stg \
+docker exec chamba-db psql -U matching_service -d cover_letter_db_stg \
   -c "SELECT count(*) FROM matching.match_results;"
 ```
 

@@ -15,7 +15,7 @@ costos, decisiones de producto pendientes. Esto es la implementación de esa pro
 | Máquina | Qué corre acá | Script |
 |---|---|---|
 | **EC2 nueva** (ingesta/matching) | `db` (pgvector) + `job-fetch` quedan encendidos; `matching-batch` corre puntual por cron | `01-`, `02-`, `03-`, `run-daily-refresh.sh` |
-| **EC2 actual** (la que ya corre el backend real) | Nada nuevo corriendo — solo se le agrega un esquema (`matching`) con 2 tablas a su Postgres ya existente | migración de Alembic + `sql/001-create-matching-writer-role.sql` |
+| **EC2 actual** (la que ya corre el backend real) | Nada nuevo corriendo — solo se le agrega un esquema (`matching`) con 2 tablas a su Postgres ya existente | migración de Alembic + `sql/001-create-matching-service-role.sql` |
 
 ## Orden de ejecución
 
@@ -31,18 +31,26 @@ git checkout -b 355-matching-schema
 alembic upgrade head
 ```
 
-**1b. El rol `matching_writer` — DESPUÉS de que la migración ya corrió**, por separado (un password no debería vivir en una migración versionada en git):
+**1b. El rol `matching_service`** — el rol ya existe en staging real (`cover_letter_db_stg`,
+creado a mano el 2026-09-21), así que en ese entorno solo falta correr los `GRANT` del
+script (el bloque de `CREATE ROLE` es un no-op ahí). En un entorno nuevo, este mismo
+script crea el rol Y aplica los `GRANT`, **DESPUÉS de que la migración de Alembic ya
+corrió** (un password no debería vivir en una migración versionada en git):
 
 ```bash
-docker exec -i chamba-db psql -U chamba_app -d chambai < sql/001-create-matching-writer-role.sql
+docker exec -i chamba-db psql -U chamba_app -d cover_letter_db_stg < sql/001-create-matching-service-role.sql
 ```
 
-⚠️ **Antes de correrlo**: editar el script y cambiar la password placeholder (`CAMBIAR_ESTA_PASSWORD`) por una real. Guardarla — hace falta para el `.env` del paso 4.
+⚠️ Si es un entorno nuevo (el rol todavía no existe): editar el script y cambiar la
+password placeholder (`CAMBIAR_ESTA_PASSWORD`) por una real antes de correrlo. Guardarla —
+hace falta para el `.env` del paso 4. Si el rol ya existe (como en staging hoy, con la
+password compartida `P4ssw0rd!` — ver nota en el script sobre rotarla), este paso es
+irrelevante.
 
 Verificar que quedó bien aislado (el rol nuevo no debe poder tocar `public`):
 ```bash
-docker exec chamba-db psql -U matching_writer -d chambai -c "SELECT count(*) FROM matching.match_results;"        # debe funcionar
-docker exec chamba-db psql -U matching_writer -d chambai -c "SELECT count(*) FROM public.curriculum_vitae_versions;"  # debe fallar: permission denied
+docker exec chamba-db psql -U matching_service -d cover_letter_db_stg -c "SELECT count(*) FROM matching.match_results;"        # debe funcionar
+docker exec chamba-db psql -U matching_service -d cover_letter_db_stg -c "SELECT count(*) FROM public.curriculum_vitae_versions;"  # debe fallar: permission denied
 ```
 
 ### 2. En la EC2 nueva
@@ -91,7 +99,7 @@ deploy/
 ├── 04-fetch-secrets-and-start.sh       ← arma el .env desde SSM Parameter Store y levanta el stack (ver ec2-code-deploy-manual.md)
 ├── run-daily-refresh.sh                ← lo que dispara el cron local O la Lambda (vía SSM), según cuál de las dos uses
 └── sql/
-    ├── 001-create-matching-writer-role.sql  ← correr en la EC2 ACTUAL, DESPUÉS de la migración de Alembic
+    ├── 001-create-matching-service-role.sql  ← correr en la EC2 ACTUAL, DESPUÉS de la migración de Alembic
     └── 002-grant-recent-job-postings-read.sql  ← correr en la EC2 ACTUAL, antes del seed (ver ec2-code-deploy-manual.md paso 8)
 ```
 

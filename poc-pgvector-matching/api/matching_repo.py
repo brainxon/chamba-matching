@@ -3,9 +3,9 @@ datos real del backend (chambai), no en chamba_jobs_hot, para que
 cv_embeddings_cache/match_results sigan disponibles para el backend real
 sin importar si la máquina que corre este batch está prendida o no.
 
-Usa un rol dedicado (`matching_writer`) con permisos SOLO sobre el
+Usa un rol dedicado (`matching_service`) con permisos SOLO sobre el
 esquema `matching` - nunca sobre `public`, donde viven los datos reales
-de usuarios. Ver ../deploy/sql/001-create-matching-schema.sql.
+de usuarios. Ver ../deploy/sql/001-create-matching-service-role.sql.
 """
 
 from typing import Optional

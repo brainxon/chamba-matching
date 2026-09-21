@@ -8,8 +8,8 @@
 #     REALES de producción (ver .env.example en esta misma carpeta) —
 #     NUNCA usar en producción las passwords de desarrollo que trae
 #     docker-compose.yml por defecto (poc_pass, poc_reader_only_355).
-#   - sql/001-create-matching-writer-role.sql ya corrido contra la DB real
-#     (ver README.md de esta carpeta) — matching_writer debe existir.
+#   - sql/001-create-matching-service-role.sql ya corrido contra la DB real
+#     (ver README.md de esta carpeta) — matching_service debe existir.
 
 set -euo pipefail
 

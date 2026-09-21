@@ -23,9 +23,9 @@ class Settings:
     embed_dim: int
 
     # Esquema `matching` dentro de la MISMA base de datos real - rol
-    # DISTINTO al de solo lectura de arriba (matching_writer), con
+    # DISTINTO al de solo lectura de arriba (matching_service), con
     # permisos únicamente sobre el esquema `matching`, nunca sobre
-    # `public`. Ver ../deploy/sql/001-create-matching-writer-role.sql.
+    # `public`. Ver ../deploy/sql/001-create-matching-service-role.sql.
     matching_db_host: str
     matching_db_port: int
     matching_db_user: str
@@ -51,7 +51,7 @@ def _load() -> Settings:
 
         matching_db_host=os.getenv("MATCHING_DB_HOST", "host.docker.internal"),
         matching_db_port=int(os.getenv("MATCHING_DB_PORT", "5434")),
-        matching_db_user=os.getenv("MATCHING_DB_USER", "matching_writer"),
+        matching_db_user=os.getenv("MATCHING_DB_USER", "matching_service"),
         matching_db_password=os.getenv("MATCHING_DB_PASSWORD", ""),
         matching_db_name=os.getenv("MATCHING_DB_NAME", "chambai"),
     )

@@ -478,5 +478,5 @@ aws ec2 delete-security-group --region "$AWS_REGION" --group-id "$NEW_SG_ID"
   la EC2 ya existe y tiene Docker instalado (user-data), pero el código todavía no está adentro.
   Es el próximo manual a armar, ahora que este quedó terminado.
 - El disparo on-demand para usuario nuevo (Lambda/API aparte) — confirmado explícitamente fuera de alcance por ahora.
-- Rotar la password del rol `matching_writer`/`matching_service` fuera de este manual (ver conversación previa sobre roles).
+- Rotar la password del rol `matching_service`/`matching_service` fuera de este manual (ver conversación previa sobre roles).
 - Confirmar con el admin que el `iam:PutUserPolicy`/`iam:PutRolePolicy` de este manual no quedó con permisos de más de lo necesario — se usó `Resource: "*"` en algunas acciones de EC2/SSM del rol de la Lambda por simplicidad; revisar si conviene acotarlas más antes de llevar esto a producción real (hoy corre contra staging).

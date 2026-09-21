@@ -54,8 +54,8 @@ services:
   #   docker compose --profile batch run --rm matching-batch           (todos)
   #   docker compose --profile batch run --rm matching-batch python -m api.batch_refresh 4   (un solo cv_version_id)
   # Escribe en el esquema `matching` de la DB REAL (chambai) — ver
-  # ../deploy/sql/001-create-matching-schema.sql. Requiere MATCHING_DB_PASSWORD
-  # (el rol matching_writer, distinto del de solo lectura de arriba).
+  # ../deploy/sql/001-create-matching-service-role.sql. Requiere MATCHING_DB_PASSWORD
+  # (el rol matching_service, distinto del de solo lectura de arriba).
   matching-batch:
     profiles: ["batch"]
     build:
@@ -71,15 +71,15 @@ services:
       JOBS_DB_USER: poc_app
       JOBS_DB_PASSWORD: poc_pass
       JOBS_DB_NAME: chamba_jobs_hot
-      BACKEND_DB_HOST: host.docker.internal
-      BACKEND_DB_PORT: "5434"
+      BACKEND_DB_HOST: "${BACKEND_DB_HOST:-host.docker.internal}"
+      BACKEND_DB_PORT: "${BACKEND_DB_PORT:-5434}"
       BACKEND_DB_USER: "${BACKEND_DB_USER:-poc_pgvector_reader}"
       BACKEND_DB_PASSWORD: "${BACKEND_DB_PASSWORD:-poc_reader_only_355}"
       BACKEND_DB_NAME: "${BACKEND_DB_NAME:-chambai}"
-      MATCHING_DB_HOST: host.docker.internal
-      MATCHING_DB_PORT: "5434"
-      MATCHING_DB_USER: matching_writer
-      MATCHING_DB_PASSWORD: "${MATCHING_DB_PASSWORD:?falta MATCHING_DB_PASSWORD (rol matching_writer) - ver deploy/sql/001-create-matching-schema.sql}"
+      MATCHING_DB_HOST: "${MATCHING_DB_HOST:-host.docker.internal}"
+      MATCHING_DB_PORT: "${MATCHING_DB_PORT:-5434}"
+      MATCHING_DB_USER: matching_service
+      MATCHING_DB_PASSWORD: "${MATCHING_DB_PASSWORD:?falta MATCHING_DB_PASSWORD (rol matching_service) - ver deploy/sql/001-create-matching-service-role.sql}"
       MATCHING_DB_NAME: "${MATCHING_DB_NAME:-chambai}"
       EMBED_DIM: "384"
     extra_hosts:
@@ -114,8 +114,8 @@ services:
       JOBS_DB_USER: poc_app
       JOBS_DB_PASSWORD: poc_pass
       JOBS_DB_NAME: chamba_jobs_hot
-      BACKEND_DB_HOST: host.docker.internal
-      BACKEND_DB_PORT: "5434"
+      BACKEND_DB_HOST: "${BACKEND_DB_HOST:-host.docker.internal}"
+      BACKEND_DB_PORT: "${BACKEND_DB_PORT:-5434}"
       BACKEND_DB_USER: "${BACKEND_DB_USER:-poc_pgvector_reader}"
       BACKEND_DB_PASSWORD: "${BACKEND_DB_PASSWORD:-poc_reader_only_355}"
       BACKEND_DB_NAME: "${BACKEND_DB_NAME:-chambai}"
