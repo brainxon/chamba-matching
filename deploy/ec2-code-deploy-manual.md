@@ -180,8 +180,10 @@ tiene datos reales. `api/seed_jobs_from_recent.py` los lee (solo lectura) y los 
 que no descarga ningún modelo y corre en segundos.
 
 **Antes**: correr el GRANT de `deploy/sql/002-grant-recent-job-postings-read.sql` contra
-la DB real — el rol `app_reader` hoy solo tiene `SELECT` sobre `curriculum_vitae_versions`,
-no sobre `recent_job_postings` todavía. Mismo criterio que `sql/001-...`: no lo corro yo,
+la DB real — el rol `app_reader` hoy tiene `SELECT` por columna sobre
+`users`/`user_cvs`/`user_cv_versions` (ver `sql/003-grant-user-cv-versions-read.sql`,
+issue #379 — reemplazó el GRANT original sobre `curriculum_vitae_versions`), pero no
+sobre `recent_job_postings` todavía. Mismo criterio que `sql/001-...`: no lo corro yo,
 lo corrés vos o el admin, directamente en la EC2 actual (la del backend):
 
 ```bash
