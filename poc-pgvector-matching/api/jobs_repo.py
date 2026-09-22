@@ -71,7 +71,7 @@ def list_jobs_missing_bge() -> list[dict]:
     with psycopg.connect(config.jobs_dsn()) as conn:
         with conn.cursor() as cur:
             cur.execute(
-                f"SELECT id, description FROM {TABLE} WHERE embedding_bge IS NULL"
+                f"SELECT id, title, company, description FROM {TABLE} WHERE embedding_bge IS NULL"
             )
             return [_row_to_dict(cur, r) for r in cur.fetchall()]
 

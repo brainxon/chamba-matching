@@ -10,9 +10,13 @@ chamba-ai-backend-fastapi/domain/models/recent_job.py:26).
 
 Usa el embedding por hashing (embeddings.py), no BGE-M3 - alcanza para
 este smoke test primario y no depende de descargar el modelo (~2.3GB) en
-la primera corrida. El backfill de embedding_bge, si hace falta después,
-sigue el mismo patrón que ya usa /api/jobs/embed-bge (list_jobs_missing_bge
-+ set_job_bge_embedding en jobs_repo.py).
+la primera corrida.
+
+⚠️ IMPORTANTE (issue #378): sin backfill, `embedding_bge` queda NULL para
+todo lo sembrado acá, y batch_refresh.knn_match_bge() filtra
+`WHERE embedding_bge IS NOT NULL` - o sea, match_results queda vacío
+aunque el batch "termine bien". Correr siempre después de este script:
+  python -m api.backfill_job_bge
 
 Idempotente por `url`: una fila cuyo url ya existe en job_postings se
 saltea (no hay constraint UNIQUE en la tabla - el chequeo es a nivel
@@ -20,8 +24,8 @@ aplicación, ver jobs_repo.url_exists), así que correr esto varias veces
 no duplica filas.
 
 Uso:
-  docker compose --profile seed run --rm seed-jobs
-  docker compose --profile seed run --rm seed-jobs python -m api.seed_jobs_from_recent 200
+  python -m api.seed_jobs_from_recent
+  python -m api.seed_jobs_from_recent 200
 """
 
 from __future__ import annotations

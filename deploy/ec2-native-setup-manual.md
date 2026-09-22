@@ -165,7 +165,8 @@ adaptarlos para invocar el venv directo:
 cd ${APP_DIR}/poc-pgvector-matching
 source venv/bin/activate
 set -a; source .env; set -a  # + BACKEND_DB_*/MATCHING_DB_* (ver .env completo del paso 4 de ec2-code-deploy-manual.md)
-python -m api.seed_jobs_from_recent      # siembra puntual
+python -m api.seed_jobs_from_recent      # siembra puntual (embedding_bge queda NULL a propósito, ver siguiente paso)
+python -m api.backfill_job_bge           # issue #378 - SIEMPRE después del seed, si no match_results queda vacío
 python -m api.batch_refresh              # batch diario (o con un cv_version_id como argumento)
 deactivate
 ```
