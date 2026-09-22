@@ -25,17 +25,22 @@ logging.basicConfig(level="INFO", format="%(asctime)s %(levelname)s %(message)s"
 log = logging.getLogger(__name__)
 
 
+CHUNK_SIZE = 32
+
+
 def backfill() -> None:
     t0 = time.perf_counter()
     jobs = jobs_repo.list_jobs_missing_bge()
     log.info("job_postings sin embedding_bge: %d", len(jobs))
-    for i, job in enumerate(jobs, start=1):
-        text_for_embedding = f"{job['title']}\n{job['company'] or ''}\n{job['description']}"
-        vec, _ = embeddings_bge.embed_text(text_for_embedding)
-        embedding_literal = embeddings_bge.to_pgvector_literal(vec)
-        jobs_repo.set_job_bge_embedding(job["id"], embedding_literal)
-        if i % 50 == 0 or i == len(jobs):
-            log.info("(%d/%d) backfill BGE listo", i, len(jobs))
+    done = 0
+    for chunk_start in range(0, len(jobs), CHUNK_SIZE):
+        chunk = jobs[chunk_start:chunk_start + CHUNK_SIZE]
+        texts = [f"{j['title']}\n{j['company'] or ''}\n{j['description']}" for j in chunk]
+        vecs, elapsed = embeddings_bge.embed_texts(texts, batch_size=CHUNK_SIZE)
+        for job, vec in zip(chunk, vecs):
+            jobs_repo.set_job_bge_embedding(job["id"], embeddings_bge.to_pgvector_literal(vec))
+        done += len(chunk)
+        log.info("(%d/%d) backfill BGE listo - lote de %d en %.1fs", done, len(jobs), len(chunk), elapsed)
     log.info("backfill terminado en %.1fs", time.perf_counter() - t0)
 
 

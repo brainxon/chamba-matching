@@ -47,6 +47,20 @@ def embed_text(text: str) -> tuple[np.ndarray, float]:
     return vec, elapsed
 
 
+def embed_texts(texts: list[str], batch_size: int = 32) -> tuple[list[np.ndarray], float]:
+    """Igual que embed_text pero para varios textos en una sola llamada -
+    en CPU, procesar N textos juntos es mucho más rápido que N llamadas
+    individuales (menos overhead por llamada). Usar para backfills/batches
+    grandes (ver api/backfill_job_bge.py, issue #378), no para el caso de
+    un solo CV on-demand."""
+    model = _get_model()
+    t0 = time.perf_counter()
+    out = model.encode([t or "" for t in texts], batch_size=batch_size, max_length=2048)
+    vecs = [np.asarray(v, dtype=np.float32) for v in out["dense_vecs"]]
+    elapsed = time.perf_counter() - t0
+    return vecs, elapsed
+
+
 def to_pgvector_literal(vec: np.ndarray) -> str:
     return "[" + ",".join(f"{x:.6f}" for x in vec.tolist()) + "]"
 
