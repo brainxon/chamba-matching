@@ -2,9 +2,10 @@
 
 Pensado para correr 1 vez al día vía cron (ver ../deploy/run-daily-refresh.sh),
 NO como parte de la API que sirve requests. Recalcula el matching de TODOS
-los CVs reales existentes contra los hot jobs actuales de chamba_jobs_hot,
-reusando el mismo modelo BGE-M3 ya cargado para todos - por eso conviene
-que esto sea un batch y no un proceso por usuario.
+los usuarios reales contra los hot jobs actuales de chamba_jobs_hot, uno por
+persona (el CV más completo de cada quien - ver users_repo.list_cvs, issue
+#379), reusando el mismo modelo BGE-M3 ya cargado para todos - por eso
+conviene que esto sea un batch y no un proceso por usuario.
 
 El caso "usuario nuevo" (matching inmediato, on-demand) llama a este mismo
 módulo pero acotado a un solo cv_version_id - ver refresh_one() / __main__.
@@ -42,7 +43,7 @@ def refresh_all() -> None:
     """Cron diario: todos los usuarios existentes."""
     t0 = time.perf_counter()
     cvs = users_repo.list_cvs(limit=1_000_000)
-    log.info("refrescando matching para %d CVs reales", len(cvs))
+    log.info("refrescando matching para %d usuarios reales (1 CV más completo c/u)", len(cvs))
     for i, cv in enumerate(cvs, start=1):
         cv_text = users_repo.get_cv_text(cv["id"])
         if not cv_text:

@@ -35,6 +35,11 @@ export AWS_REGION="eu-central-1"
 export PROJECT_NAME="chamba-matching"
 export GIT_REPO="https://github.com/brainxon/chamba-matching.git"
 
+# Misma convención de rutas que ya usa la EC2 del backend real
+# (ahí el compañero clonó en /home/ubuntu/apps/backend/stg/chamba-ai-backend-fastapi) —
+# acá: apps/<componente>/<entorno>/<repo>.
+export APP_DIR="/home/ubuntu/apps/matching/stg/chamba-matching"
+
 # El instance-id de la EC2 nueva (la que devolvió el paso 7 de aws-services-manual.md).
 # Si no lo tenés a mano, la Lambda ya lo tiene guardado:
 export INSTANCE_ID=$(aws lambda get-function-configuration --region "$AWS_REGION" \
@@ -112,11 +117,12 @@ configurado en vez de CloudShell.
 cat > /tmp/ssm-deploy-command.json <<EOF
 {
   "commands": [
-    "rm -rf /home/ubuntu/chamba-matching",
-    "sudo -u ubuntu git clone --depth 1 ${GIT_REPO} /home/ubuntu/chamba-matching",
-    "ln -sfn /home/ubuntu/chamba-matching/poc-pgvector-matching /home/ubuntu/poc-pgvector-matching",
-    "ln -sfn /home/ubuntu/chamba-matching/poc-job-posting-fetch /home/ubuntu/poc-job-posting-fetch",
-    "ln -sfn /home/ubuntu/chamba-matching/deploy /home/ubuntu/deploy",
+    "sudo -u ubuntu mkdir -p $(dirname ${APP_DIR})",
+    "rm -rf ${APP_DIR}",
+    "sudo -u ubuntu git clone --depth 1 ${GIT_REPO} ${APP_DIR}",
+    "ln -sfn ${APP_DIR}/poc-pgvector-matching /home/ubuntu/poc-pgvector-matching",
+    "ln -sfn ${APP_DIR}/poc-job-posting-fetch /home/ubuntu/poc-job-posting-fetch",
+    "ln -sfn ${APP_DIR}/deploy /home/ubuntu/deploy",
     "chmod +x /home/ubuntu/deploy/*.sh",
     "sudo -u ubuntu env PROJECT_NAME=${PROJECT_NAME} AWS_REGION=${AWS_REGION} bash /home/ubuntu/deploy/04-fetch-secrets-and-start.sh"
   ]
@@ -134,14 +140,16 @@ echo "Command: $DEPLOY_COMMAND_ID"
 ```
 
 Los tres symlinks (`~/poc-pgvector-matching`, `~/poc-job-posting-fetch`, `~/deploy`)
-existen por dos razones: (1) la Lambda tiene hardcodeado
-`/home/ubuntu/deploy/run-daily-refresh.sh` (ver `aws-services-manual.md` paso 8) y sigue
-funcionando así sin tocarla; (2) `docker-compose.yml` referencia `job-fetch` con
-`context: ../poc-job-posting-fetch` — **probado localmente**: `docker compose` resuelve
-esa ruta relativa contra la ruta *lógica* del symlink (`~/poc-pgvector-matching/..` →
-`~/`), no contra la física (`~/chamba-matching/`), así que sin el symlink de
-`poc-job-posting-fetch` al lado el build fallaría buscando `~/poc-job-posting-fetch`. El
-contenido real vive en `~/chamba-matching/` (el repo clonado completo).
+quedan siempre en `/home/ubuntu/` directo (no bajo `apps/...`) por dos razones: (1) la
+Lambda tiene hardcodeado `/home/ubuntu/deploy/run-daily-refresh.sh` (ver
+`aws-services-manual.md` paso 8) y sigue funcionando así sin tocarla; (2)
+`docker-compose.yml` referencia `job-fetch` con `context: ../poc-job-posting-fetch` —
+**probado localmente**: `docker compose` resuelve esa ruta relativa contra la ruta
+*lógica* del symlink (`~/poc-pgvector-matching/..` → `~/`), no contra la física
+(`${APP_DIR}/`), así que sin el symlink de `poc-job-posting-fetch` al lado el build
+fallaría buscando `~/poc-job-posting-fetch`. El contenido real vive en `${APP_DIR}`
+(el repo clonado completo) — misma convención `apps/<componente>/<entorno>/<repo>` que ya
+usa la EC2 del backend (`/home/ubuntu/apps/backend/stg/chamba-ai-backend-fastapi`).
 
 `02-start-stack.sh` (llamado al final de `04-fetch-secrets-and-start.sh`) solo levanta
 `db` + `job-fetch` — `matching-batch` y `seed-jobs` quedan apagados, se disparan puntuales
@@ -285,7 +293,7 @@ corre puntual, `docker compose ps` no lo muestra entre corridas).
 | Política inline agregada al rol EC2 existente | `${PROJECT_NAME}-ec2-ssm-read` |
 | Parámetros SecureString | `/${PROJECT_NAME}/JOBS_DB_PASSWORD`, `/${PROJECT_NAME}/BACKEND_DB_HOST`, `/${PROJECT_NAME}/BACKEND_DB_USER`, `/${PROJECT_NAME}/BACKEND_DB_PASSWORD`, `/${PROJECT_NAME}/BACKEND_DB_NAME`, `/${PROJECT_NAME}/MATCHING_DB_PASSWORD` |
 | GRANT agregado al rol de solo lectura (DB real) | `SELECT` sobre `public.recent_job_postings` para `app_reader` |
-| Código en la EC2 nueva | `/home/ubuntu/chamba-matching/` (repo clonado) + symlinks `~/poc-pgvector-matching`, `~/poc-job-posting-fetch`, `~/deploy` |
+| Código en la EC2 nueva | `${APP_DIR}` (repo clonado, `/home/ubuntu/apps/matching/stg/chamba-matching`) + symlinks `~/poc-pgvector-matching`, `~/poc-job-posting-fetch`, `~/deploy` |
 | Datos sembrados | `job_postings` (`chamba_jobs_hot`, EC2 nueva) desde `recent_job_postings` (DB real) |
 
 ## Redeploy (si cambia el código)

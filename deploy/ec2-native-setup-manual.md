@@ -9,12 +9,16 @@ ya usa la EC2 del backend real (Postgres nativo, no containerizado, confirmado
 en la EC2 real.
 
 Sigue después del paso 3 de `ec2-code-deploy-manual.md` (código ya clonado vía `git
-clone` en `~/chamba-matching`) — reemplaza los pasos 3 (armar `.env` + `docker compose
+clone` en `${APP_DIR}`) — reemplaza los pasos 3 (armar `.env` + `docker compose
 up`) en adelante.
 
 ## 0. Variables
 
 ```bash
+# Misma convención que ya usa la EC2 del backend real
+# (/home/ubuntu/apps/backend/stg/chamba-ai-backend-fastapi):
+export APP_DIR="/home/ubuntu/apps/matching/stg/chamba-matching"
+
 export JOBS_DB_NAME="chamba_jobs_hot"
 export JOBS_DB_USER="jobs_ingest"        # rol propio de esta DB, no "poc_app" (ese es solo el default de dev-infra local)
 export JOBS_DB_PASSWORD="REEMPLAZAR"     # elegir una password real, guardarla
@@ -76,14 +80,14 @@ tenían como containers distintos:
 ```bash
 sudo apt-get install -y python3-venv python3-pip
 
-cd ~/chamba-matching/poc-pgvector-matching
+cd ${APP_DIR}/poc-pgvector-matching
 python3 -m venv venv
 source venv/bin/activate
 pip install --no-cache-dir torch --index-url https://download.pytorch.org/whl/cpu
 pip install --no-cache-dir -r requirements-api.txt
 deactivate
 
-cd ~/chamba-matching/poc-job-posting-fetch
+cd ${APP_DIR}/poc-job-posting-fetch
 python3 -m venv venv
 source venv/bin/activate
 pip install --no-cache-dir -r requirements.txt
@@ -93,7 +97,7 @@ deactivate
 ## 4. `.env` para `poc-pgvector-matching` (variables de entorno, no Docker)
 
 ```bash
-cd ~/chamba-matching/poc-pgvector-matching
+cd ${APP_DIR}/poc-pgvector-matching
 cat > .env <<EOF
 JOBS_DB_HOST=localhost
 JOBS_DB_PORT=5432
@@ -111,7 +115,7 @@ depender de `docker compose`).
 ## 5. Correr la migración de Alembic (crea `job_postings` + `cv_embeddings_cache` + pgvector)
 
 ```bash
-cd ~/chamba-matching/poc-pgvector-matching
+cd ${APP_DIR}/poc-pgvector-matching
 source venv/bin/activate
 set -a; source .env; set +a
 alembic upgrade head
@@ -136,8 +140,8 @@ After=network.target
 [Service]
 Type=simple
 User=ubuntu
-WorkingDirectory=/home/ubuntu/chamba-matching/poc-job-posting-fetch
-ExecStart=/home/ubuntu/chamba-matching/poc-job-posting-fetch/venv/bin/uvicorn api.main:app --host 0.0.0.0 --port 8002
+WorkingDirectory=${APP_DIR}/poc-job-posting-fetch
+ExecStart=${APP_DIR}/poc-job-posting-fetch/venv/bin/uvicorn api.main:app --host 0.0.0.0 --port 8002
 Restart=on-failure
 RestartSec=5
 
@@ -158,7 +162,7 @@ puntual), igual que antes. `run-daily-refresh.sh` y el `command` de `seed-jobs` 
 adaptarlos para invocar el venv directo:
 
 ```bash
-cd ~/chamba-matching/poc-pgvector-matching
+cd ${APP_DIR}/poc-pgvector-matching
 source venv/bin/activate
 set -a; source .env; set -a  # + BACKEND_DB_*/MATCHING_DB_* (ver .env completo del paso 4 de ec2-code-deploy-manual.md)
 python -m api.seed_jobs_from_recent      # siembra puntual
