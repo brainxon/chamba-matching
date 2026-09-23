@@ -47,15 +47,20 @@ def embed_text(text: str) -> tuple[np.ndarray, float]:
     return vec, elapsed
 
 
-def embed_texts(texts: list[str], batch_size: int = 32) -> tuple[list[np.ndarray], float]:
-    """Igual que embed_text pero para varios textos en una sola llamada -
-    en CPU, procesar N textos juntos es mucho más rápido que N llamadas
-    individuales (menos overhead por llamada). Usar para backfills/batches
-    grandes (ver api/backfill_job_bge.py, issue #378), no para el caso de
-    un solo CV on-demand."""
+def embed_texts(texts: list[str], batch_size: int = 8, max_length: int = 2048) -> tuple[list[np.ndarray], float]:
+    """Igual que embed_text pero para varios textos en una sola llamada.
+
+    ⚠️ En CPU y con poca RAM (ver EC2 de matching: 3.7GB, sin swap por
+    default) esto NO necesariamente es más rápido que llamadas
+    individuales, y con batch_size/max_length grandes puede disparar el
+    OOM killer del kernel (confirmado en una corrida real, issue #378) -
+    el "Killed" que mata el proceso sin traceback de Python. batch_size
+    default bajado de 32 a 8, y max_length parametrizable (job postings
+    no necesitan 2048 tokens como un CV completo) para mantener la
+    memoria pico acotada."""
     model = _get_model()
     t0 = time.perf_counter()
-    out = model.encode([t or "" for t in texts], batch_size=batch_size, max_length=2048)
+    out = model.encode([t or "" for t in texts], batch_size=batch_size, max_length=max_length)
     vecs = [np.asarray(v, dtype=np.float32) for v in out["dense_vecs"]]
     elapsed = time.perf_counter() - t0
     return vecs, elapsed

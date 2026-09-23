@@ -25,7 +25,12 @@ logging.basicConfig(level="INFO", format="%(asctime)s %(levelname)s %(message)s"
 log = logging.getLogger(__name__)
 
 
-CHUNK_SIZE = 32
+# Bajados de (32, 2048) - issue #378: esa combinación tiró OOM ("Killed",
+# sin traceback) en la EC2 real (3.7GB RAM, sin swap). Una descripción de
+# trabajo no necesita 2048 tokens como un CV completo, así que bajar
+# max_length también reduce el cómputo, no solo la memoria.
+CHUNK_SIZE = 8
+JOB_MAX_LENGTH = 512
 
 
 def backfill() -> None:
@@ -36,7 +41,7 @@ def backfill() -> None:
     for chunk_start in range(0, len(jobs), CHUNK_SIZE):
         chunk = jobs[chunk_start:chunk_start + CHUNK_SIZE]
         texts = [f"{j['title']}\n{j['company'] or ''}\n{j['description']}" for j in chunk]
-        vecs, elapsed = embeddings_bge.embed_texts(texts, batch_size=CHUNK_SIZE)
+        vecs, elapsed = embeddings_bge.embed_texts(texts, batch_size=CHUNK_SIZE, max_length=JOB_MAX_LENGTH)
         for job, vec in zip(chunk, vecs):
             jobs_repo.set_job_bge_embedding(job["id"], embeddings_bge.to_pgvector_literal(vec))
         done += len(chunk)
