@@ -135,7 +135,12 @@ def list_cvs(limit: int = 20) -> list[dict]:
     for row in rows:
         score = _completeness_score(row["cv_json"])
         current = best_per_user.get(row["user_id"])
-        if current is None or score > current["_score"]:
+        is_better = (
+            current is None
+            or score > current["_score"]
+            or (score == current["_score"] and row["created_at"] > current["created_at"])
+        )
+        if is_better:
             row["_score"] = score
             best_per_user[row["user_id"]] = row
 
