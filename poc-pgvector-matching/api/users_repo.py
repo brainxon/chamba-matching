@@ -1,17 +1,29 @@
 """Acceso SOLO LECTURA a la DB REAL del backend. En dev-infra: DB `chambai`,
 container `chamba-db`, puerto publicado 5434, rol `poc_pgvector_reader`. En
 staging/producción: rol `app_reader` (ver ../deploy/ec2-code-deploy-manual.md
-y ../deploy/sql/003-grant-user-cv-versions-read.sql) - GRANT SELECT por
-COLUMNA (nunca la tabla completa) sobre users/user_cvs/user_cv_versions,
-nunca sobre datos personales (nombre, email, etc.). Ningún statement de
-escritura corre nunca contra esta conexión.
+y ../deploy/sql/004-grant-root-cv-versions-read.sql) - GRANT SELECT por
+COLUMNA (nunca la tabla completa) sobre root_curriculum_vitaes/
+root_curriculum_vitae_versions, nunca sobre datos personales. Ningún
+statement de escritura corre nunca contra esta conexión.
 
-Fuente del CV (issue #379): el CV BASE vigente de cada usuario, vía el
-puntero explícito que mantiene la app real -
-`users.current_user_cv_id -> user_cvs.latest_version_id -> user_cv_versions.id`
-- NO `curriculum_vitae_versions` (esa tabla guarda outputs *tailored* por
-aplicación, sin ningún flag de "actual"; un usuario puede tener muchas
-filas ahí y no hay forma de saber cuál usar sin adivinar)."""
+Fuente del CV (issue #379, corregido tras verificar con una cuenta real -
+ver `.issues/355-pgvector-matching-poc/execution-report.md`): la feature
+real es "CV Maestro", respaldada por `root_curriculum_vitaes` (una fila
+POR IDIOMA por usuario) + `root_curriculum_vitae_versions` (versionado
+dentro de cada idioma) - NO `user_cvs`/`user_cv_versions` (esa es una
+feature vieja/sin uso real, confirmado: una cuenta real con "CV Maestro"
+completo en la UI tenía CERO filas ahí) NI `curriculum_vitae_versions`
+(esa son outputs *tailored* por aplicación, sin flag de "actual").
+
+Un usuario puede tener varios `root_curriculum_vitaes` (uno por idioma) -
+acá se elige, por usuario, el de mayor contenido (`cv_json` más largo,
+entre TODOS sus idiomas) como proxy de "CV más completo" (no existe
+ningún % de completitud persistido en la DB - se calcula en el frontend,
+ver `chamba-ai/src/app/utils/root-cv-completeness.util.ts`, nunca se
+guarda). La versión de cada idioma usada es la de `version_number` más
+alto (mismo criterio que usa el backend real para leer, ver
+`adapters/persistence/repositories/root_cv.py` - NO confía en
+`latest_version_id` para leer, a pesar de que la columna existe)."""
 
 from __future__ import annotations
 
@@ -41,20 +53,30 @@ def _flatten_json_text(value) -> list[str]:
 
 
 def list_cvs(limit: int = 20) -> list[dict]:
-    """Una fila por usuario, automático: el join por `current_user_cv_id`/
-    `latest_version_id` solo puede devolver un user_cv_version por
-    persona (son punteros a un solo registro), a diferencia de la vieja
-    fuente (curriculum_vitae_versions) que necesitaba deduplicar a mano."""
+    """Una fila por usuario: entre TODOS sus `root_curriculum_vitaes` (uno
+    por idioma), la versión más reciente (`version_number` más alto) del
+    idioma con más contenido. No hace falta tocar `users` para esto -
+    `root_curriculum_vitaes.user_id` ya alcanza."""
     with psycopg.connect(config.backend_dsn()) as conn:
         with conn.cursor() as cur:
             cur.execute(
                 """
-                SELECT ucv2.id, u.id AS user_id, ucv2.version_number, ucv2.language,
-                       length(ucv2.cv_json) AS text_length, ucv2.created_at
-                FROM users u
-                JOIN user_cvs ucv ON u.current_user_cv_id = ucv.id
-                JOIN user_cv_versions ucv2 ON ucv.latest_version_id = ucv2.id
-                ORDER BY ucv2.created_at DESC
+                SELECT id, user_id, language, version_number, text_length, created_at
+                FROM (
+                    SELECT DISTINCT ON (rcv.user_id)
+                           rcvv.id, rcv.user_id, rcv.language, rcvv.version_number,
+                           length(rcvv.cv_json) AS text_length, rcvv.created_at
+                    FROM root_curriculum_vitaes rcv
+                    JOIN root_curriculum_vitae_versions rcvv
+                        ON rcvv.root_cv_id = rcv.id
+                       AND rcvv.version_number = (
+                           SELECT MAX(v2.version_number)
+                           FROM root_curriculum_vitae_versions v2
+                           WHERE v2.root_cv_id = rcv.id
+                       )
+                    ORDER BY rcv.user_id, length(rcvv.cv_json) DESC, rcvv.created_at DESC
+                ) most_complete_per_user
+                ORDER BY created_at DESC
                 LIMIT %s
                 """,
                 (limit,),
@@ -64,14 +86,13 @@ def list_cvs(limit: int = 20) -> list[dict]:
 
 
 def get_cv_text(cv_version_id: int) -> Optional[str]:
-    """cv_version_id acá es user_cv_versions.id (ver list_cvs, ya NO
-    curriculum_vitae_versions.id). Devuelve el contenido aplanado a texto
-    plano para el embedding - cv_json es JSON serializado, no texto
-    directo."""
+    """cv_version_id acá es root_curriculum_vitae_versions.id (ver
+    list_cvs). cv_json tiene la forma {"root_cv": {...}} - se aplana todo
+    el árbol igual, sin asumir esa envoltura específica, por si cambia."""
     with psycopg.connect(config.backend_dsn()) as conn:
         with conn.cursor() as cur:
             cur.execute(
-                "SELECT cv_json FROM user_cv_versions WHERE id = %s",
+                "SELECT cv_json FROM root_curriculum_vitae_versions WHERE id = %s",
                 (cv_version_id,),
             )
             row = cur.fetchone()
