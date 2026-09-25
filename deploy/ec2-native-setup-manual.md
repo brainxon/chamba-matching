@@ -171,10 +171,12 @@ python -m api.batch_refresh              # batch diario (o con un cv_version_id 
 deactivate
 ```
 
-⚠️ **Pendiente** (fuera de este manual): reescribir `run-daily-refresh.sh` y el handler
-de la Lambda (`aws-services-manual.md` paso 8) para que llamen esto en vez de
-`docker compose --profile batch run --rm matching-batch` — hoy siguen asumiendo Docker.
-Próximo paso una vez confirmado que este flujo nativo funciona de punta a punta.
+✅ `run-daily-refresh.sh` ya está reescrito para este flujo nativo (issue #378) — corre
+`backfill_job_bge` + `batch_refresh` con el venv directo, sin Docker, y de paso incluye una
+limpieza defensiva de disco al inicio (ver esa nota en el propio script). El handler de la
+Lambda (`aws-services-manual.md` paso 8) no necesita cambios: sigue disparando el mismo
+path (`/home/ubuntu/deploy/run-daily-refresh.sh`, symlink), el script se encarga de todo
+internamente.
 
 ## 8. Verificación final
 
